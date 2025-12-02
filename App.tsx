@@ -8,9 +8,6 @@ import { Logger } from './components/Logger';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { TermsOfServiceModal } from './components/TermsOfServiceModal';
 import { ConsentBanner } from './components/ConsentBanner';
-import { ScriptInjector } from './components/ScriptInjector';
-import { AdIframe } from './components/AdIframe';
-import { PopunderAd } from './components/PopunderAd';
 import { 
   FolderGit2, 
   Github, 
@@ -52,6 +49,93 @@ import {
   Check
 } from 'lucide-react';
 
+// HARDCORE ADS CONFIGURATION - NO BACKEND NEEDED
+const HARDCORE_ADS = {
+  // TOP ADS - 468x60
+  TOP_ADS: {
+    script: `<script type="text/javascript">
+  atOptions = {
+    'key' : '823a1404c3a371cd86e2ab9f362bc591',
+    'format' : 'iframe',
+    'height' : 60,
+    'width' : 468,
+    'params' : {}
+  };
+</script>
+<script type="text/javascript" src="//www.highperformanceformat.com/823a1404c3a371cd86e2ab9f362bc591/invoke.js"></script>`,
+    width: 468,
+    height: 60
+  },
+  
+  // RECTANGLE 1 ADS - 300x250
+  RECTANGLE_1: {
+    script: `<script type="text/javascript">
+  atOptions = {
+    'key' : '4e1d6e7afa165a217c3bc02c37331489',
+    'format' : 'iframe',
+    'height' : 250,
+    'width' : 300,
+    'params' : {}
+  };
+</script>
+<script type="text/javascript" src="//www.highperformanceformat.com/4e1d6e7afa165a217c3bc02c37331489/invoke.js"></script>`,
+    width: 300,
+    height: 250
+  },
+  
+  // RECTANGLE 2 ADS - 300x250 (Same zone ID for twin rectangles)
+  RECTANGLE_2: {
+    script: `<script type="text/javascript"> atOptions = {  'key' : '4e1d6e7afa165a217c3bc02c37331489',  'format' : 'iframe',  'height' : 250,  'width' : 300,  'params' : {} }; </script> <script type="text/javascript" src="//www.highperformanceformat.com/4e1d6e7afa165a217c3bc02c37331489/invoke.js" ></script>`,
+    width: 300,
+    height: 250
+  },
+  
+  // GAP ADS - 728x90
+  GAP_ADS: {
+    script: `<script type="text/javascript">
+  atOptions = {
+    'key' : 'fcc870d98927f45e39aae90987ce4697',
+    'format' : 'iframe',
+    'height' : 90,
+    'width' : 728,
+    'params' : {}
+  };
+</script>
+<script type="text/javascript" src="//www.highperformanceformat.com/fcc870d98927f45e39aae90987ce4697/invoke.js"></script>`,
+    width: 728,
+    height: 90
+  },
+  
+  // BOTTOM ADS - 320x50
+  BOTTOM_ADS: {
+    script: `<script type="text/javascript">
+  atOptions = {
+    'key' : 'c595631f1bd4cb087b7e774e8ec46ec4',
+    'format' : 'iframe',
+    'height' : 50,
+    'width' : 320,
+    'params' : {}
+  };
+</script>
+<script type="text/javascript" src="//www.highperformanceformat.com/c595631f1bd4cb087b7e774e8ec46ec4/invoke.js"></script>`,
+    width: 320,
+    height: 50
+  },
+  
+  // NATIVE ADS
+  NATIVE_ADS: {
+    script: `<script async="async" data-cfasync="false" src="//pl28161831.effectivegatecpm.com/7a04948fc82ec21bdf9a510dfacabc56/invoke.js" ></script> <div id="container-7a04948fc82ec21bdf9a510dfacabc56"></div>`,
+    width: 320,
+    height: 100
+  },
+  
+  // POPUNDER ADS
+  POPUNDER_ADS: {
+    script: `<script type="text/javascript" src="//pl28159467.effectivegatecpm.com/22/5e/33/225e3319aa7c4ca510948f013752e4fa.js" ></script>`,
+    isPopunder: true
+  }
+};
+
 const App: React.FC = () => {
   const [config, setConfig] = useState<SyncConfig>({
     token: localStorage.getItem('gh_token') || '',
@@ -63,12 +147,18 @@ const App: React.FC = () => {
     syncMode: (localStorage.getItem('gh_syncMode') as any) || 'preserve_structure',
   });
 
+  // HARDCORE ADS STATE
+  const [hardcoreAdsEnabled, setHardcoreAdsEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('hardcore_ads_enabled') !== 'false';
+  });
+  const [popunderShown, setPopunderShown] = useState(false);
+  const [adsInitialized, setAdsInitialized] = useState(false);
+  const [adRefreshTrigger, setAdRefreshTrigger] = useState(0);
+
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
-  const [showImportAdsModal, setShowImportAdsModal] = useState(false);
-  const [importAdsInput, setImportAdsInput] = useState('');
-
+  
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -77,7 +167,6 @@ const App: React.FC = () => {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
-  const [showPopunder, setShowPopunder] = useState(false);
   const [pendingExit, setPendingExit] = useState(false);
   
   const [hasConsent, setHasConsent] = useState(
@@ -112,136 +201,184 @@ const App: React.FC = () => {
     skipped: number;
   }>({ mode: null, repoUrl: '', total: 0, scanned: 0, uploaded: 0, skipped: 0 });
 
-  interface AdsConfig {
-    adsEnabled: boolean;
-    adsterraEnabled: boolean;
-    adsenseEnabled: boolean;
-    adsterraZoneId: string;
-    adsenseClientId: string;
-    adsenseSlotId: string;
-    placements?: Record<string, any>;
-    customAsterraIframe?: {
-      enabled: boolean;
-      code?: string;
-      width: number;
-      height: number;
-      apiKey?: string;
-      format?: string;
-      invokeUrl?: string;
-      placementId?: string;
-      zoneId?: string;
-    };
-    adsterra?: {
-      enabled?: boolean;
-      zoneId: string;
-      domain: string;
-      size: string;
-      type: string;
-      link: string;
-      bannerZoneId?: string;
-      rectangleZoneId?: string;
-    };
-    adsense?: {
-      enabled?: boolean;
-      clientId: string;
-      slotId: string;
-      link?: string;
-      bannerSlotId?: string;
-      rectangleSlotId?: string;
-    };
-  }
-
-  interface PlacementAd {
-    adsterra?: {
-      zoneId: string;
-      domain: string;
-      size: string;
-      type: string;
-      link: string;
-      rawScript?: string;
-    };
-    adsense?: {
-      clientId: string;
-      slotId: string;
-      link?: string;
-    };
-  }
-
-  const [adsConfig, setAdsConfig] = useState<AdsConfig>(() => {
-    const saved = localStorage.getItem('admin_ads_config');
-    return saved ? JSON.parse(saved) : {
-      adsEnabled: false,
-      adsterraEnabled: false,
-      adsenseEnabled: false,
-      adsterraZoneId: '',
-      adsenseClientId: '',
-      adsenseSlotId: ''
-    };
-  });
-
-  const [placementAds, setPlacementAds] = useState<Record<string, PlacementAd>>(() => {
-    const saved = localStorage.getItem('placement_ads_config');
-    return saved ? JSON.parse(saved) : {};
-  });
-
-  const [adsRefreshTrigger, setAdsRefreshTrigger] = useState(0);
   const [syncState, setSyncState] = useState<SyncState>(SyncState.IDLE);
-
-  // Scroll to top when sync page opens
-  useEffect(() => {
-    if (syncState !== SyncState.IDLE) {
-      window.scrollTo(0, 0);
-    }
-  }, [syncState]);
-
-  // Load ads from backend (all users see same ads)
-  useEffect(() => {
-    const loadAdsFromBackend = async () => {
-      try {
-        const response = await fetch('/api/ads');
-        if (response.ok) {
-          const adsFromServer = await response.json();
-          if (Object.keys(adsFromServer).length > 0) {
-            setPlacementAds(adsFromServer);
-            localStorage.setItem('placement_ads_config', JSON.stringify(adsFromServer));
-          }
-        }
-      } catch (error) {
-        console.log('Backend ads not available, using localStorage');
-      }
-    };
-    loadAdsFromBackend();
-  }, []);
-
-  const [showLocationSelector, setShowLocationSelector] = useState(false);
-  const [pendingSave, setPendingSave] = useState<{ type: string; data: any } | null>(null);
-  const [expandedPlacement, setExpandedPlacement] = useState<string | null>(null);
-  const [expandedAdType, setExpandedAdType] = useState<string | null>(null);
-  const [asterraInputMode, setAsterraInputMode] = useState<'fields' | 'raw' | 'script'>('fields');
-  const [asterraScriptInput, setAsterraScriptInput] = useState('');
-  const [locationScriptInput, setLocationScriptInput] = useState('');
-  const [selectedLocationForScript, setSelectedLocationForScript] = useState<string | null>(null);
-
-  const parseAsterraScript = (script: string) => {
-    const atOptionsMatch = script.match(/atOptions\s*=\s*\{([^}]+)\}/);
-    if (atOptionsMatch) {
-      const optionsStr = atOptionsMatch[1];
-      const keyMatch = optionsStr.match(/['"]?key['"]?\s*:\s*['"]([^'"]+)['"]/);
-      const formatMatch = optionsStr.match(/['"]?format['"]?\s*:\s*['"]([^'"]+)['"]/);
-      const heightMatch = optionsStr.match(/['"]?height['"]?\s*:\s*(\d+)/);
-      const widthMatch = optionsStr.match(/['"]?width['"]?\s*:\s*(\d+)/);
-      
-      return {
-        zoneId: keyMatch ? keyMatch[1] : '',
-        format: formatMatch ? formatMatch[1] : '',
-        height: heightMatch ? parseInt(heightMatch[1]) : 0,
-        width: widthMatch ? parseInt(widthMatch[1]) : 0
-      };
-    }
-    return null;
-  };
   
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // HARDCORE ADS INITIALIZATION
+  useEffect(() => {
+    if (!hasConsent || !hardcoreAdsEnabled) return;
+
+    // Initialize ads after a short delay
+    const timer = setTimeout(() => {
+      setAdsInitialized(true);
+      setAdRefreshTrigger(prev => prev + 1);
+    }, 1000);
+
+    // Auto-refresh ads every 30 seconds
+    const refreshTimer = setInterval(() => {
+      if (hardcoreAdsEnabled && hasConsent) {
+        setAdRefreshTrigger(prev => prev + 1);
+      }
+    }, 30000);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(refreshTimer);
+    };
+  }, [hasConsent, hardcoreAdsEnabled]);
+
+  // POPUNDER ADS TRIGGER
+  useEffect(() => {
+    if (!hasConsent || !hardcoreAdsEnabled || popunderShown) return;
+
+    const handleClick = () => {
+      if (!popunderShown) {
+        // Inject popunder script
+        const script = HARDCORE_ADS.POPUNDER_ADS.script;
+        const container = document.createElement('div');
+        container.innerHTML = script;
+        document.body.appendChild(container);
+        setPopunderShown(true);
+        localStorage.setItem('popunder_shown', 'true');
+      }
+    };
+
+    // Trigger popunder on first click anywhere
+    document.addEventListener('click', handleClick, { once: true });
+
+    return () => {
+      document.removeEventListener('click', handleClick);
+    };
+  }, [hasConsent, hardcoreAdsEnabled, popunderShown]);
+
+  // HARDCORE AD COMPONENT
+  const HardcoreAd = ({ adType, className = '', style = {} }: { 
+    adType: keyof typeof HARDCORE_ADS; 
+    className?: string;
+    style?: React.CSSProperties;
+  }) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [adLoaded, setAdLoaded] = useState(false);
+
+    useEffect(() => {
+      if (!containerRef.current || !hardcoreAdsEnabled || !hasConsent || !adsInitialized) return;
+      if (adType === 'POPUNDER_ADS') return; // Popunder handled separately
+
+      const loadAd = () => {
+        try {
+          const adConfig = HARDCORE_ADS[adType];
+          const container = containerRef.current;
+          
+          if (!container) return;
+
+          // Clear previous content
+          container.innerHTML = '';
+
+          // Create wrapper
+          const wrapper = document.createElement('div');
+          wrapper.style.width = `${adConfig.width}px`;
+          wrapper.style.height = `${adConfig.height}px`;
+          wrapper.style.margin = '0 auto';
+          wrapper.style.position = 'relative';
+          wrapper.style.overflow = 'hidden';
+          wrapper.style.borderRadius = '8px';
+          wrapper.style.background = 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)';
+          wrapper.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+
+          // Parse and inject script
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = adConfig.script;
+          
+          // Create container divs first
+          const divElements = tempDiv.querySelectorAll('div[id]');
+          divElements.forEach(div => {
+            const newDiv = document.createElement('div');
+            newDiv.id = div.id;
+            newDiv.style.width = '100%';
+            newDiv.style.height = '100%';
+            wrapper.appendChild(newDiv);
+          });
+
+          // Inject scripts
+          const scripts = tempDiv.querySelectorAll('script');
+          scripts.forEach((oldScript, index) => {
+            setTimeout(() => {
+              const newScript = document.createElement('script');
+              newScript.type = oldScript.type || 'text/javascript';
+              
+              // Copy all attributes
+              Array.from(oldScript.attributes).forEach(attr => {
+                newScript.setAttribute(attr.name, attr.value);
+              });
+              
+              if (oldScript.src) {
+                newScript.src = oldScript.src;
+                newScript.async = true;
+              } else if (oldScript.textContent) {
+                newScript.textContent = oldScript.textContent;
+              }
+              
+              wrapper.appendChild(newScript);
+            }, index * 100);
+          });
+
+          container.appendChild(wrapper);
+          setAdLoaded(true);
+        } catch (error) {
+          console.error(`Failed to load ${adType} ad:`, error);
+          if (containerRef.current) {
+            containerRef.current.innerHTML = `
+              <div style="width:${HARDCORE_ADS[adType].width}px;height:${HARDCORE_ADS[adType].height}px;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;border-radius:8px;color:white;font-weight:bold;text-align:center;margin:0 auto;">
+                <div>
+                  <div>${adType.replace('_', ' ')}</div>
+                  <div style="font-size:12px;opacity:0.8;">${HARDCORE_ADS[adType].width}x${HARDCORE_ADS[adType].height}</div>
+                </div>
+              </div>
+            `;
+          }
+        }
+      };
+
+      // Load ad with delay for better performance
+      const timeoutId = setTimeout(loadAd, 500);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        if (containerRef.current) {
+          containerRef.current.innerHTML = '';
+        }
+      };
+    }, [adType, hardcoreAdsEnabled, hasConsent, adsInitialized, adRefreshTrigger]);
+
+    if (!hardcoreAdsEnabled || !hasConsent || adType === 'POPUNDER_ADS') return null;
+
+    return (
+      <div 
+        ref={containerRef} 
+        className={`hardcore-ad ${className}`}
+        style={style}
+        data-ad-type={adType}
+        data-refresh={adRefreshTrigger}
+      />
+    );
+  };
+
+  // TWIN RECTANGLES COMPONENT
+  const TwinRectanglesAd = () => {
+    if (!hardcoreAdsEnabled || !hasConsent) return null;
+
+    return (
+      <div className="w-full my-3 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 px-2">
+        <div className="min-w-[280px] sm:w-[300px] h-[250px] flex items-center justify-center">
+          <HardcoreAd adType="RECTANGLE_1" />
+        </div>
+        <div className="min-w-[280px] sm:w-[300px] h-[250px] flex items-center justify-center">
+          <HardcoreAd adType="RECTANGLE_2" />
+        </div>
+      </div>
+    );
+  };
 
   // Share functionality
   const appUrl = 'https://gitsync-mobile-plus-pc.vercel.app/';
@@ -986,489 +1123,6 @@ const App: React.FC = () => {
     setShowTermsOfService(false);
   };
 
-  const saveAdsConfig = () => {
-    localStorage.setItem('admin_ads_config', JSON.stringify(adsConfig));
-    alert('Ads configuration saved successfully!');
-  };
-
-  const handleSaveAdToLocation = (locationKey: string) => {
-    if (!pendingSave) return;
-    
-    const updatedPlacements = { ...placementAds };
-    
-    if (pendingSave.type === 'adsterra-raw') {
-      if (!updatedPlacements[locationKey]) updatedPlacements[locationKey] = {};
-      if (!updatedPlacements[locationKey].adsterra) updatedPlacements[locationKey].adsterra = { zoneId: '', domain: '', size: '', type: '', link: '' };
-      updatedPlacements[locationKey].adsterra!.rawScript = pendingSave.data;
-    } else if (pendingSave.type === 'adsterra-fields') {
-      updatedPlacements[locationKey] = { ...updatedPlacements[locationKey], adsterra: pendingSave.data };
-    } else if (pendingSave.type === 'adsense') {
-      updatedPlacements[locationKey] = { ...updatedPlacements[locationKey], adsense: pendingSave.data };
-    }
-    
-    localStorage.setItem('placement_ads_config', JSON.stringify(updatedPlacements));
-    setPlacementAds(updatedPlacements);
-    setAdsRefreshTrigger(prev => prev + 1);
-    setShowLocationSelector(false);
-    setPendingSave(null);
-    alert('✅ Ad saved to ' + locationKey.replace(/([A-Z])/g, ' $1').trim());
-  };
-
-  // Detect device type
-  const getDeviceType = (): 'desktop' | 'android' | 'ios' | 'mac' => {
-    const ua = navigator.userAgent.toLowerCase();
-    
-    // iOS detection (must come before generic mobile detection)
-    if (/iphone|ipad|ipod/.test(ua)) {
-      return 'ios';
-    }
-    
-    // Android detection
-    if (/android/.test(ua)) {
-      return 'android';
-    }
-    
-    // Mac detection (must come before generic detection)
-    if (/macintosh|mac os x/.test(ua)) {
-      return 'mac';
-    }
-    
-    // Default to desktop
-    return 'desktop';
-  };
-
-  // Adsterra Ad Frame Component - Injects real Adsterra iframe
-  const AsterraAdFrame = ({ zoneId, size, width, height }: { zoneId: string; size: string; width?: number; height?: number }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const uniqueId = useRef(`ats-${Math.random().toString(36).substr(2, 9)}`).current;
-
-    useEffect(() => {
-      if (!containerRef.current || !zoneId) return;
-
-      const loadAdsterra = () => {
-        try {
-          // Create a fresh setup for this specific zone
-          const scriptId = `ats-script-${uniqueId}`;
-          
-          // Remove any existing script for this zone
-          const existingScript = document.getElementById(scriptId);
-          if (existingScript) {
-            existingScript.remove();
-          }
-
-          // Set global options for this ad
-          const atOptions = {
-            key: '63599cc8817b6d06dbd50f28820d7d10',
-            format: 'iframe',
-            height: height || 250,
-            width: width || 300,
-            params: {}
-          };
-
-          (window as any).atOptions = atOptions;
-          
-          // Reset provider to allow fresh load
-          if ((window as any).__atProvider) {
-            (window as any).__atProvider.loader = null;
-          }
-
-          // Create and inject the invoke script
-          const script = document.createElement('script');
-          script.id = scriptId;
-          script.type = 'text/javascript';
-          script.src = '//www.highperformanceformat.com/63599cc8817b6d06dbd50f28820d7d10/invoke.js';
-          script.async = true;
-          script.setAttribute('data-zone-id', zoneId);
-          
-          if (containerRef.current) {
-            // Clear previous content
-            containerRef.current.innerHTML = '';
-            containerRef.current.appendChild(script);
-          }
-        } catch (e) {
-          console.error('Adsterra load error:', e);
-        }
-      };
-
-      // Load immediately
-      loadAdsterra();
-      
-      return () => {
-        // Cleanup on unmount
-        const script = document.getElementById(`ats-script-${uniqueId}`);
-        if (script) {
-          script.remove();
-        }
-      };
-    }, [zoneId, width, height, adsRefreshTrigger, uniqueId]);
-
-    return (
-      <div 
-        ref={containerRef} 
-        className="flex items-center justify-center w-full" 
-        style={{ 
-          minHeight: `${height || 250}px`,
-          width: `${width || 300}px`
-        }} 
-      />
-    );
-  };
-
-  // Raw Script Component - Injects raw HTML/script directly
-  const RawScriptComponent = ({ script }: { script: string }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-    const uniqueId = useRef(`aag-${Math.random().toString(36).substr(2, 9)}`);
-    const scriptLoaded = useRef(false);
-
-    useEffect(() => {
-      if (!containerRef.current || !script || scriptLoaded.current) return;
-      scriptLoaded.current = true;
-
-      try {
-        // Clear container and all its children
-        if (containerRef.current) {
-          containerRef.current.innerHTML = '';
-        }
-
-        // Parse the script to extract script tag and div container
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = script;
-        
-        // Extract container IDs from div elements FIRST
-        const divElements = Array.from(tempDiv.querySelectorAll('div'));
-        const containerIds: string[] = [];
-        divElements.forEach(div => {
-          if (div.id) {
-            containerIds.push(div.id);
-          }
-        });
-        
-        // STEP 1: Create ALL container divs FIRST before any scripts run
-        if (containerRef.current) {
-          // First append divs that are in the script
-          divElements.forEach(div => {
-            if (div.id) {
-              const newDiv = document.createElement('div');
-              newDiv.id = div.id;
-              newDiv.style.minHeight = '250px';
-              containerRef.current?.appendChild(newDiv);
-            }
-          });
-          
-          // If no divs found, create a default one
-          if (divElements.length === 0) {
-            const defaultDiv = document.createElement('div');
-            defaultDiv.id = uniqueId.current;
-            defaultDiv.style.minHeight = '250px';
-            containerRef.current.appendChild(defaultDiv);
-          }
-        }
-        
-        // STEP 2: Now execute the scripts
-        const scripts = tempDiv.querySelectorAll('script');
-        scripts.forEach((oldScript, index) => {
-          setTimeout(() => {
-            const newScript = document.createElement('script');
-            newScript.type = oldScript.type || 'text/javascript';
-            
-            // Copy ALL attributes
-            Array.from(oldScript.attributes).forEach(attr => {
-              newScript.setAttribute(attr.name, attr.value);
-            });
-            
-            if (oldScript.src) {
-              newScript.src = oldScript.src;
-              newScript.async = true;
-            } else if (oldScript.textContent) {
-              newScript.textContent = oldScript.textContent;
-            }
-            
-            // Append to container (not head) so it finds divs
-            if (containerRef.current) {
-              containerRef.current.appendChild(newScript);
-            }
-          }, index * 50); // Reduced delay - 50ms
-        });
-      } catch (e) {
-        console.error('Raw script injection error:', e);
-        if (containerRef.current) {
-          containerRef.current.innerHTML = '<p style="color:red;font-size:12px;">Error: ' + (e as Error).message + '</p>';
-        }
-      }
-    }, [script, adsRefreshTrigger]);
-
-    return (
-      <div 
-        ref={containerRef} 
-        className="w-full flex justify-center" 
-        style={{ minHeight: '300px', position: 'relative' }} 
-      />
-    );
-  };
-
-  // Google AdSense Component - Injects real AdSense script
-  const GoogleAdSenseUnit = ({ clientId, slotId, width, height }: { clientId: string; slotId: string; width?: number; height?: number }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-      if (!containerRef.current || !clientId || !slotId) return;
-
-      try {
-        // Load Google AdSense script if not already loaded
-        if (!(window as any).adsbygoogle) {
-          const script = document.createElement('script');
-          script.async = true;
-          script.src = '//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
-          script.onload = () => {
-            try {
-              ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({
-                google_ad_client: clientId,
-                enable_page_level_ads: true
-              });
-            } catch (e) {
-              console.error('AdSense error:', e);
-            }
-          };
-          document.head.appendChild(script);
-        } else {
-          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({
-            google_ad_client: clientId,
-            enable_page_level_ads: true
-          });
-        }
-      } catch (e) {
-        console.error('Google AdSense init error:', e);
-      }
-    }, [clientId, slotId]);
-
-    return (
-      <div 
-        ref={containerRef}
-        className="flex items-center justify-center"
-        style={{ width: width || 300, height: height || 250 }}
-      >
-        <ins
-          className="adsbygoogle"
-          style={{ display: 'block', width: width || 300, height: height || 250 }}
-          data-ad-client={clientId}
-          data-ad-slot={slotId}
-          data-ad-format="auto"
-          data-full-width-responsive="true"
-        />
-      </div>
-    );
-  };
-
-  const AdRectangle = ({ label = "Ad Block", placementKey = 'rectangle1' }: { label?: string, placementKey?: string }) => {
-    if (!adsConfig.placements?.[placementKey]) return null;
-
-    // Load placement-specific ads from localStorage - re-triggers when adsRefreshTrigger changes
-    const [placementConfig, setPlacementConfig] = useState(() => {
-      const savedPlacementAds = JSON.parse(localStorage.getItem('placement_ads_config') || '{}');
-      return savedPlacementAds[placementKey as string];
-    });
-
-    useEffect(() => {
-      const savedPlacementAds = JSON.parse(localStorage.getItem('placement_ads_config') || '{}');
-      setPlacementConfig(savedPlacementAds[placementKey as string]);
-    }, [placementKey, adsRefreshTrigger]);
-    
-    let displayContent = null;
-
-    // PRIORITY: Show raw script if configured
-    if (placementConfig?.rawScript) {
-      displayContent = <RawScriptComponent script={placementConfig.rawScript} />;
-    }
-    // PRIORITY 2: Show Adsterra raw script if configured
-    else if (placementConfig?.adsterra?.rawScript) {
-      displayContent = <RawScriptComponent script={placementConfig.adsterra.rawScript} />;
-    }
-    // Otherwise show configured placement ads (Adsterra + AdSense if both configured)
-    else if (placementConfig) {
-      const adElements = [];
-      
-      // Add Adsterra if configured
-      if (placementConfig.adsterra?.zoneId) {
-        adElements.push(
-          <div key="adsterra" className="flex justify-center">
-            <AsterraAdFrame 
-              zoneId={placementConfig.adsterra.zoneId} 
-              size={placementConfig.adsterra.size} 
-              width={300} 
-              height={250}
-            />
-          </div>
-        );
-      }
-      
-      // Add Google AdSense if configured
-      if (placementConfig.adsense?.slotId && placementConfig.adsense?.clientId) {
-        adElements.push(
-          <div key="adsense" className="flex justify-center">
-            <GoogleAdSenseUnit 
-              clientId={placementConfig.adsense.clientId} 
-              slotId={placementConfig.adsense.slotId}
-              width={300}
-              height={250}
-            />
-          </div>
-        );
-      }
-      
-      if (adElements.length > 0) {
-        displayContent = <div className="space-y-4">{adElements}</div>;
-      }
-    }
-
-    return (
-      <div className="w-[300px] h-[250px] bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-center relative overflow-hidden group shadow-lg mx-auto shrink-0">
-        <div className="absolute inset-0 bg-slate-800/20 opacity-50"></div>
-        <div className="z-10 text-center p-4 w-full">
-          {displayContent ? (
-            displayContent
-          ) : (
-            <>
-              <p className="text-slate-600 text-xs font-bold tracking-widest uppercase mb-2">{label}</p>
-              <div className="w-16 h-8 bg-slate-800 rounded mx-auto flex items-center justify-center border border-slate-700/50">
-                <span className="text-slate-500 text-[10px] font-bold">300x250</span>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const AdNativeBanner = ({ label = "Native Ad", placementKey = 'nativeBanner' }: { label?: string, placementKey?: string }) => {
-    const config = placementAds[placementKey];
-    const hasRawScript = config?.adsterra?.rawScript;
-    const hasZoneId = config?.adsterra?.zoneId;
-    const hasAdSense = config?.adsense?.slotId && config?.adsense?.clientId;
-    
-    if (!hasRawScript && !hasZoneId && !hasAdSense) return null;
-    
-    return (
-      <div className="w-full flex justify-center my-2">
-        {hasRawScript ? (
-          <AdIframe html={config.adsterra.rawScript!} placementId={placementKey} width={320} height={100} />
-        ) : hasZoneId ? (
-          <AsterraAdFrame 
-            zoneId={config.adsterra.zoneId} 
-            size={config.adsterra.size} 
-            width={320} 
-            height={100}
-          />
-        ) : hasAdSense ? (
-          <GoogleAdSenseUnit 
-            clientId={config.adsense!.clientId!} 
-            slotId={config.adsense!.slotId!}
-            width={320}
-            height={100}
-          />
-        ) : null}
-      </div>
-    );
-  };
-
-  const TwinRectangles = () => {
-    const config1 = placementAds['rectangle1'];
-    const config2 = placementAds['rectangle2'];
-    const hasRect1 = config1?.adsterra?.rawScript || config1?.adsterra?.zoneId || (config1?.adsense?.slotId && config1?.adsense?.clientId);
-    const hasRect2 = config2?.adsterra?.rawScript || config2?.adsterra?.zoneId || (config2?.adsense?.slotId && config2?.adsense?.clientId);
-    
-    if (!hasRect1 && !hasRect2) return null;
-    
-    const renderAd = (config: typeof config1, key: string) => {
-      if (!config) return null;
-      if (config.adsterra?.rawScript) {
-        return <AdIframe html={config.adsterra.rawScript} placementId={key} width={300} height={250} />;
-      } else if (config.adsterra?.zoneId) {
-        return <AsterraAdFrame zoneId={config.adsterra.zoneId} size={config.adsterra.size} width={300} height={250} />;
-      } else if (config.adsense?.slotId && config.adsense?.clientId) {
-        return <GoogleAdSenseUnit clientId={config.adsense.clientId} slotId={config.adsense.slotId} width={300} height={250} />;
-      }
-      return null;
-    };
-    
-    return (
-      <div className="w-full my-3 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 overflow-x-auto px-2">
-        {hasRect1 && (
-          <div className="min-w-[280px] sm:w-[300px] h-[250px] flex items-center justify-center flex-shrink-0">
-            {renderAd(config1, 'rect1')}
-          </div>
-        )}
-        {hasRect2 && (
-          <div className="min-w-[280px] sm:w-[300px] h-[250px] flex items-center justify-center flex-shrink-0">
-            {renderAd(config2, 'rect2')}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const CustomAsterraAd = () => {
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-      if (!adsConfig.customAsterraIframe?.enabled || !adsConfig.customAsterraIframe?.apiKey) {
-        return;
-      }
-
-      const loadScript = () => {
-        // Create options object
-        const atOptions = {
-          key: adsConfig.customAsterraIframe?.apiKey,
-          format: adsConfig.customAsterraIframe?.format || 'iframe',
-          height: adsConfig.customAsterraIframe?.height || 250,
-          width: adsConfig.customAsterraIframe?.width || 300,
-          params: {}
-        };
-
-        // Set global atOptions
-        (window as any).atOptions = atOptions;
-
-        // Check if script already loaded
-        if ((window as any).atOptions && (window as any).atOptions.key === adsConfig.customAsterraIframe?.apiKey) {
-          // Script already running, just trigger rendering
-          if ((window as any).__atProvider) {
-            (window as any).__atProvider.render();
-          } else {
-            // Load the invoke script
-            const script = document.createElement('script');
-            script.type = 'text/javascript';
-            script.src = adsConfig.customAsterraIframe?.invokeUrl || '//www.highperformanceformat.com/' + adsConfig.customAsterraIframe?.apiKey + '/invoke.js';
-            script.async = true;
-            if (containerRef.current) {
-              containerRef.current.appendChild(script);
-            }
-          }
-        }
-      };
-
-      loadScript();
-    }, [adsConfig.customAsterraIframe?.enabled, adsConfig.customAsterraIframe?.apiKey]);
-
-    if (!adsConfig.customAsterraIframe?.enabled || !adsConfig.customAsterraIframe?.apiKey) {
-      return null;
-    }
-
-    return (
-      <div 
-        ref={containerRef}
-        className="w-full flex justify-center my-6"
-        style={{
-          minHeight: `${adsConfig.customAsterraIframe.height}px`,
-          minWidth: `${adsConfig.customAsterraIframe.width}px`
-        }}
-      >
-        <div style={{ 
-          width: `${adsConfig.customAsterraIframe.width}px`, 
-          height: `${adsConfig.customAsterraIframe.height}px`
-        }}></div>
-      </div>
-    );
-  };
-
   const StatCard = ({ label, value, subLabel }: { label: string, value: number, subLabel?: string }) => (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center text-center shadow-lg">
       <span className="text-3xl font-bold text-white mb-1">{value}</span>
@@ -1482,6 +1136,13 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-black text-slate-200 font-sans p-4 flex flex-col items-center overflow-y-auto">
         <div className="w-full max-w-3xl flex flex-col">
           
+          {/* TOP ADS ON SYNC PAGE */}
+          {hardcoreAdsEnabled && hasConsent && (
+            <div className="w-full flex justify-center my-2 mb-4">
+              <HardcoreAd adType="TOP_ADS" />
+            </div>
+          )}
+
           <div className="mb-6 mt-2">
             <div className="flex items-center gap-3 mb-2">
               {syncState === SyncState.SUCCESS ? (
@@ -1533,77 +1194,33 @@ const App: React.FC = () => {
             <StatCard label="Uploaded" value={stats.uploaded} />
           </div>
 
-          {/* TOP BANNER AD - FAST LOAD */}
-          {(placementAds['topBanner']?.adsterra?.rawScript || placementAds['topBanner']?.adsterra?.zoneId) && (
+          {/* GAP ADS ON SYNC PAGE */}
+          {hardcoreAdsEnabled && hasConsent && (
             <div className="w-full flex justify-center my-2">
-              {placementAds['topBanner']?.adsterra?.rawScript ? (
-                <AdIframe html={placementAds['topBanner'].adsterra.rawScript} placementId="sync-top" width={320} height={100} />
-              ) : (
-                <AsterraAdFrame 
-                  zoneId={placementAds['topBanner'].adsterra.zoneId} 
-                  size={placementAds['topBanner'].adsterra.size} 
-                  width={320} 
-                  height={100}
-                />
-              )}
-            </div>
-          )}
-
-          {/* NATIVE BANNER AD - FAST LOAD */}
-          {(placementAds['nativeBanner']?.adsterra?.rawScript || placementAds['nativeBanner']?.adsterra?.zoneId) && (
-            <div className="w-full flex justify-center my-2">
-              {placementAds['nativeBanner']?.adsterra?.rawScript ? (
-                <AdIframe html={placementAds['nativeBanner'].adsterra.rawScript} placementId="sync-native" width={320} height={100} />
-              ) : (
-                <AsterraAdFrame 
-                  zoneId={placementAds['nativeBanner'].adsterra.zoneId} 
-                  size={placementAds['nativeBanner'].adsterra.size} 
-                  width={320} 
-                  height={100}
-                />
-              )}
+              <HardcoreAd adType="GAP_ADS" />
             </div>
           )}
 
           <Logger logs={logs} hasError={hasError} />
 
-          {/* RECTANGLE ADS - FAST LOAD AFTER TERMINAL */}
-          {(placementAds['rectangle1']?.adsterra?.rawScript || placementAds['rectangle1']?.adsterra?.zoneId || 
-            placementAds['rectangle2']?.adsterra?.rawScript || placementAds['rectangle2']?.adsterra?.zoneId) && (
+          {/* TWIN RECTANGLES ON SYNC PAGE */}
+          {hardcoreAdsEnabled && hasConsent && (
             <div className="w-full my-3">
-              <TwinRectangles />
+              <TwinRectanglesAd />
             </div>
           )}
 
-          {/* GAP AD AFTER TERMINAL - FAST LOAD */}
-          {(placementAds['gapAds']?.adsterra?.rawScript || placementAds['gapAds']?.adsterra?.zoneId) && (
+          {/* NATIVE ADS ON SYNC PAGE */}
+          {hardcoreAdsEnabled && hasConsent && (
             <div className="w-full flex justify-center my-2">
-              {placementAds['gapAds']?.adsterra?.rawScript ? (
-                <AdIframe html={placementAds['gapAds'].adsterra.rawScript} placementId="sync-gap" width={320} height={100} />
-              ) : (
-                <AsterraAdFrame 
-                  zoneId={placementAds['gapAds'].adsterra.zoneId} 
-                  size={placementAds['gapAds'].adsterra.size} 
-                  width={320} 
-                  height={100}
-                />
-              )}
+              <HardcoreAd adType="NATIVE_ADS" />
             </div>
           )}
 
-          {/* BOTTOM BANNER AD - FAST LOAD */}
-          {(placementAds['bottomBanner']?.adsterra?.rawScript || placementAds['bottomBanner']?.adsterra?.zoneId) && (
+          {/* BOTTOM ADS ON SYNC PAGE */}
+          {hardcoreAdsEnabled && hasConsent && (
             <div className="w-full flex justify-center my-2">
-              {placementAds['bottomBanner']?.adsterra?.rawScript ? (
-                <AdIframe html={placementAds['bottomBanner'].adsterra.rawScript} placementId="sync-bottom" width={320} height={100} />
-              ) : (
-                <AsterraAdFrame 
-                  zoneId={placementAds['bottomBanner'].adsterra.zoneId} 
-                  size={placementAds['bottomBanner'].adsterra.size} 
-                  width={320} 
-                  height={100}
-                />
-              )}
+              <HardcoreAd adType="BOTTOM_ADS" />
             </div>
           )}
 
@@ -1641,157 +1258,78 @@ const App: React.FC = () => {
             </button>
           </header>
 
-          {/* Simple Instructions */}
-          <div className="bg-amber-900/30 border border-amber-600 rounded-xl p-4 mb-6">
-            <p className="text-amber-200 text-sm">
-              Paste your ad script in any location below. The ad will appear exactly at that position in your app.
-            </p>
-          </div>
-
-          {/* Ad Placement Locations */}
-          <div className="space-y-4">
-            {[
-              { key: 'topBanner', label: 'Top Banner', desc: 'Shows at the very top of the app', color: 'purple' },
-              { key: 'rectangle1', label: 'Rectangle Ad 1', desc: 'Shows left side (300x250)', color: 'orange' },
-              { key: 'rectangle2', label: 'Rectangle Ad 2', desc: 'Shows right side (300x250)', color: 'amber' },
-              { key: 'gapAds', label: 'Gap Ad', desc: 'Shows between sections', color: 'cyan' },
-              { key: 'nativeBanner', label: 'Native Banner', desc: 'Shows in content feed', color: 'pink' },
-              { key: 'bottomBanner', label: 'Bottom Banner', desc: 'Shows at the footer', color: 'emerald' },
-              { key: 'popunder', label: 'Popunder Ad', desc: 'Opens in new tab on first click', color: 'red' },
-            ].map(loc => (
-              <div key={loc.key} className={`bg-slate-900 border border-slate-700 rounded-xl p-4`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="font-bold text-white flex items-center gap-2">
-                      {loc.label}
-                      {placementAds[loc.key]?.adsterra?.rawScript && (
-                        <span className="text-emerald-400 text-sm">Active</span>
-                      )}
-                    </h3>
-                    <p className="text-xs text-slate-400">{loc.desc}</p>
-                  </div>
+          {/* Hardcore Ads Settings */}
+          <div className="bg-red-900/30 border border-red-700 rounded-xl p-6 mb-6">
+            <h2 className="text-xl font-bold text-white mb-4">💀 Hardcore Ads Configuration</h2>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-white text-lg">Enable Hardcore Ads</span>
+                  <p className="text-red-300 text-sm mt-1">All ads will run on all user devices without backend</p>
                 </div>
-
-                <textarea 
-                  placeholder={`Paste your ${loc.label} ad script here...`}
-                  value={placementAds[loc.key]?.adsterra?.rawScript || ''}
-                  onChange={(e) => {
-                    setPlacementAds(prev => ({
-                      ...prev,
-                      [loc.key]: {
-                        ...prev[loc.key],
-                        adsterra: {
-                          ...(prev[loc.key]?.adsterra || { zoneId: '', domain: '', size: '', type: '', link: '' }),
-                          rawScript: e.target.value
-                        }
-                      }
-                    }));
-                  }}
-                  className="w-full h-20 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 mb-3"
-                />
-
-                <div className="flex gap-2">
-                  <button 
-                    onClick={async () => {
-                      const script = placementAds[loc.key]?.adsterra?.rawScript || '';
-                      if (!script.trim()) {
-                        alert('Please paste a script first');
-                        return;
-                      }
-                      try {
-                        const response = await fetch('/api/ads/save', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            password: adminPasswordInput,
-                            placement_key: loc.key,
-                            ad_config: placementAds[loc.key]
-                          })
-                        });
-                        if (response.ok) {
-                          localStorage.setItem('placement_ads_config', JSON.stringify(placementAds));
-                          setAdsRefreshTrigger(prev => prev + 1);
-                          alert(`✅ Ad saved to ${loc.label}! All users will see this.`);
-                        } else if (response.status === 429) {
-                          alert(`⛔ Too many failed attempts! Your IP is locked out for 15 minutes for security.`);
-                        } else {
-                          const error = await response.json();
-                          alert(`❌ Error: ${error.error}`);
-                        }
-                      } catch (e) {
-                        alert('Backend unavailable - saving locally only');
-                        localStorage.setItem('placement_ads_config', JSON.stringify(placementAds));
-                        setAdsRefreshTrigger(prev => prev + 1);
-                      }
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hardcoreAdsEnabled}
+                    onChange={(e) => {
+                      setHardcoreAdsEnabled(e.target.checked);
+                      localStorage.setItem('hardcore_ads_enabled', e.target.checked.toString());
                     }}
-                    className="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-2 rounded-lg font-medium text-sm"
-                  >
-                    Save Ad
-                  </button>
-                  {placementAds[loc.key]?.adsterra?.rawScript && (
-                    <button 
-                      onClick={async () => {
-                        try {
-                          const response = await fetch('/api/ads/delete', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              password: adminPasswordInput,
-                              placement_key: loc.key
-                            })
-                          });
-                          if (response.ok) {
-                            const updated = { ...placementAds };
-                            if (updated[loc.key]?.adsterra) {
-                              updated[loc.key].adsterra!.rawScript = undefined;
-                            }
-                            localStorage.setItem('placement_ads_config', JSON.stringify(updated));
-                            setPlacementAds(updated);
-                            setAdsRefreshTrigger(prev => prev + 1);
-                            alert(`✅ Ad removed from ${loc.label}!`);
-                          } else if (response.status === 429) {
-                            alert(`⛔ Too many failed attempts! Your IP is locked out for 15 minutes for security.`);
-                          } else {
-                            const error = await response.json();
-                            alert(`❌ Error: ${error.error}`);
-                          }
-                        } catch (e) {
-                          alert('Backend unavailable - removing locally only');
-                          const updated = { ...placementAds };
-                          if (updated[loc.key]?.adsterra) {
-                            updated[loc.key].adsterra!.rawScript = undefined;
-                          }
-                          localStorage.setItem('placement_ads_config', JSON.stringify(updated));
-                          setPlacementAds(updated);
-                          setAdsRefreshTrigger(prev => prev + 1);
-                        }
-                      }}
-                      className="px-4 bg-red-600 hover:bg-red-500 text-white py-2 rounded-lg font-medium text-sm"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
+                    className="sr-only peer"
+                  />
+                  <div className="w-14 h-8 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-red-600"></div>
+                </label>
               </div>
-            ))}
+
+              <div className="text-xs text-red-300 mt-2">
+                ⚠️ Ads are hardcoded and will appear on all pages for all users who accept privacy policy.
+              </div>
+            </div>
           </div>
 
-          {/* Visual Preview */}
-          <div className="mt-6 bg-slate-900 border border-slate-700 rounded-xl p-4">
-            <h3 className="font-bold text-white mb-4">Where Ads Will Show</h3>
-            <div className="bg-slate-950 rounded-lg p-4 space-y-3">
-              <div className="bg-purple-900/30 border border-purple-600 rounded p-2 text-center text-purple-300 text-xs">Top Banner</div>
-              <div className="bg-slate-800 rounded p-3 text-center text-slate-500 text-xs">App Content</div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-orange-900/30 border border-orange-600 rounded p-2 text-center text-orange-300 text-xs">Rectangle 1</div>
-                <div className="bg-amber-900/30 border border-amber-600 rounded p-2 text-center text-amber-300 text-xs">Rectangle 2</div>
+          {/* Ad Preview Section */}
+          <div className="bg-slate-900 border border-slate-700 rounded-xl p-6">
+            <h3 className="font-bold text-white mb-4">Ad Zone Preview</h3>
+            <div className="space-y-6">
+              <div>
+                <h4 className="text-slate-400 mb-2">Top Banner (468x60)</h4>
+                <HardcoreAd adType="TOP_ADS" />
               </div>
-              <div className="bg-slate-800 rounded p-3 text-center text-slate-500 text-xs">More Content</div>
-              <div className="bg-cyan-900/30 border border-cyan-600 rounded p-2 text-center text-cyan-300 text-xs">Gap Ad</div>
-              <div className="bg-slate-800 rounded p-3 text-center text-slate-500 text-xs">Content</div>
-              <div className="bg-pink-900/30 border border-pink-600 rounded p-2 text-center text-pink-300 text-xs">Native Banner</div>
-              <div className="bg-emerald-900/30 border border-emerald-600 rounded p-2 text-center text-emerald-300 text-xs">Bottom Banner</div>
-              <div className="bg-red-900/30 border border-red-600 rounded p-2 text-center text-red-300 text-xs">Popunder (on click)</div>
+              
+              <div>
+                <h4 className="text-slate-400 mb-2">Twin Rectangles (300x250 x2)</h4>
+                <TwinRectanglesAd />
+              </div>
+              
+              <div>
+                <h4 className="text-slate-400 mb-2">Gap Ads (728x90)</h4>
+                <HardcoreAd adType="GAP_ADS" />
+              </div>
+              
+              <div>
+                <h4 className="text-slate-400 mb-2">Native Ads</h4>
+                <HardcoreAd adType="NATIVE_ADS" />
+              </div>
+              
+              <div>
+                <h4 className="text-slate-400 mb-2">Bottom Banner (320x50)</h4>
+                <HardcoreAd adType="BOTTOM_ADS" />
+              </div>
+            </div>
+          </div>
+
+          {/* Ad Stats */}
+          <div className="mt-6 bg-slate-800/50 rounded-xl p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <div className="text-white font-bold text-lg">💸 Revenue Ready</div>
+                <div className="text-xs text-slate-400">Ads auto-load on all devices</div>
+              </div>
+              <div className="text-right">
+                <div className="text-emerald-400 font-bold">100%</div>
+                <div className="text-xs text-slate-400">Coverage</div>
+              </div>
             </div>
           </div>
         </div>
@@ -1800,54 +1338,11 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-slate-200 font-sans flex flex-col overflow-y-auto" onClick={() => {
-      if (placementAds['popunder']?.adsterra?.rawScript) {
-        const script = placementAds['popunder'].adsterra.rawScript;
-        if (script && !sessionStorage.getItem('popunder_shown')) {
-          sessionStorage.setItem('popunder_shown', 'true');
-          const container = document.createElement('div');
-          // Use a timeout to allow React to render, then inject scripts
-          setTimeout(() => {
-            const temp = document.createElement('div');
-            temp.innerHTML = script;
-            const scripts = temp.querySelectorAll('script');
-            scripts.forEach(oldScript => {
-              const newScript = document.createElement('script');
-              newScript.type = oldScript.getAttribute('type') || 'text/javascript';
-              Array.from(oldScript.attributes).forEach(attr => {
-                if (attr.name !== 'type') {
-                  newScript.setAttribute(attr.name, attr.value);
-                }
-              });
-              if (oldScript.textContent) {
-                newScript.textContent = oldScript.textContent;
-              }
-              container.appendChild(newScript);
-            });
-            // Also add non-script HTML
-            Array.from(temp.childNodes).forEach(node => {
-              if ((node as any).tagName !== 'SCRIPT') {
-                container.appendChild(node.cloneNode(true));
-              }
-            });
-            document.body.appendChild(container);
-          }, 0);
-        }
-      }
-    }}>
-      {/* TOP BANNER AD */}
-      {(placementAds['topBanner']?.adsterra?.rawScript || placementAds['topBanner']?.adsterra?.zoneId) && (
-        <div className="w-full flex justify-center py-1 px-2 bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-800">
-          {placementAds['topBanner']?.adsterra?.rawScript ? (
-            <AdIframe html={placementAds['topBanner'].adsterra.rawScript} placementId="topBanner" width={320} height={100} />
-          ) : placementAds['topBanner']?.adsterra?.zoneId ? (
-            <AsterraAdFrame 
-              zoneId={placementAds['topBanner'].adsterra.zoneId} 
-              size={placementAds['topBanner'].adsterra.size} 
-              width={320} 
-              height={100}
-            />
-          ) : null}
+    <div className="min-h-screen bg-black text-slate-200 font-sans flex flex-col overflow-y-auto">
+      {/* TOP ADS - ALWAYS VISIBLE */}
+      {hardcoreAdsEnabled && hasConsent && (
+        <div className="w-full flex justify-center py-2 px-2 bg-gradient-to-b from-slate-900 to-slate-950 border-b border-slate-800">
+          <HardcoreAd adType="TOP_ADS" />
         </div>
       )}
 
@@ -1910,24 +1405,6 @@ const App: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {showLocationSelector && pendingSave && (
-        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-300">
-            <div className="p-6 space-y-4">
-              <h3 className="text-xl font-bold text-white mb-4">Choose Banner Location</h3>
-              <div className="grid grid-cols-1 gap-3">
-                <button onClick={() => handleSaveAdToLocation('topBanner')} className="bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-lg font-semibold transition">📍 Top Banner (320x100)</button>
-                <button onClick={() => handleSaveAdToLocation('twinRectangles')} className="bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-semibold transition">📍 Twin Rectangles (300x250 x2)</button>
-                <button onClick={() => handleSaveAdToLocation('gapAds')} className="bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-lg font-semibold transition">📍 Gap Ads (320x100)</button>
-                <button onClick={() => handleSaveAdToLocation('nativeBanner')} className="bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-lg font-semibold transition">📍 Native Banner (320x100)</button>
-                <button onClick={() => handleSaveAdToLocation('bottomBanner')} className="bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-lg font-semibold transition">📍 Bottom Banner (320x100)</button>
-              </div>
-              <button onClick={() => { setShowLocationSelector(false); setPendingSave(null); }} className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2 rounded-lg font-medium mt-4">Cancel</button>
-            </div>
           </div>
         </div>
       )}
@@ -2287,7 +1764,13 @@ const App: React.FC = () => {
                     </>
                   )}
                 </button>
-                <TwinRectangles />
+                
+                {/* TWIN RECTANGLES ADS AFTER CONNECT BUTTON */}
+                {hardcoreAdsEnabled && hasConsent && (
+                  <div className="w-full my-3">
+                    <TwinRectanglesAd />
+                  </div>
+                )}
               </>
             )}
 
@@ -2310,7 +1793,12 @@ const App: React.FC = () => {
                    </button>
                 </div>
 
-                <AdNativeBanner label="Gap Ad" placementKey="gapAds" />
+                {/* GAP ADS AFTER CONNECTION SUCCESS */}
+                {hardcoreAdsEnabled && hasConsent && (
+                  <div className="w-full flex justify-center my-2">
+                    <HardcoreAd adType="GAP_ADS" />
+                  </div>
+                )}
 
                 <div className="relative group touch-manipulation">
                   <input
@@ -2453,32 +1941,30 @@ const App: React.FC = () => {
                       </div>
                     )}
                     
-                    <TwinRectangles />
+                    {/* TWIN RECTANGLES ADS BEFORE TERMINAL */}
+                    {hardcoreAdsEnabled && hasConsent && (
+                      <div className="w-full my-3">
+                        <TwinRectanglesAd />
+                      </div>
+                    )}
 
                     <div className="pt-2 pb-2">
                        <Logger logs={logs} hasError={hasError} />
                     </div>
 
-                    {/* GAP ADS - BELOW TERMINAL */}
-                    {(placementAds['gapAds']?.adsterra?.rawScript || placementAds['gapAds']?.adsterra?.zoneId) && (
+                    {/* NATIVE ADS AFTER TERMINAL */}
+                    {hardcoreAdsEnabled && hasConsent && (
                       <div className="w-full flex justify-center py-2 my-2">
-                        {placementAds['gapAds']?.adsterra?.rawScript ? (
-                          <AdIframe html={placementAds['gapAds'].adsterra.rawScript} placementId="gapAds" width={320} height={100} />
-                        ) : placementAds['gapAds']?.adsterra?.zoneId ? (
-                          <AsterraAdFrame 
-                            zoneId={placementAds['gapAds'].adsterra.zoneId} 
-                            size={placementAds['gapAds'].adsterra.size} 
-                            width={320} 
-                            height={100}
-                          />
-                        ) : null}
+                        <HardcoreAd adType="NATIVE_ADS" />
                       </div>
                     )}
 
-                    {/* NATIVE BANNER AD - BELOW TERMINAL OUTPUT */}
-                    <div className="w-full flex justify-center py-2 my-2">
-                      <AdNativeBanner label="Native Ad" placementKey="nativeBanner" />
-                    </div>
+                    {/* GAP ADS AFTER TERMINAL OUTPUT */}
+                    {hardcoreAdsEnabled && hasConsent && (
+                      <div className="w-full flex justify-center py-2 my-2">
+                        <HardcoreAd adType="GAP_ADS" />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -2487,21 +1973,10 @@ const App: React.FC = () => {
         </div>
 
         <div className="mt-6 border-t border-slate-800 pt-6">
-           <TwinRectangles />
-           
-           {/* BOTTOM BANNER AD */}
-           {(placementAds['bottomBanner']?.adsterra?.rawScript || placementAds['bottomBanner']?.adsterra?.zoneId) && (
+           {/* BOTTOM ADS */}
+           {hardcoreAdsEnabled && hasConsent && (
              <div className="w-full flex justify-center py-2 my-2">
-               {placementAds['bottomBanner']?.adsterra?.rawScript ? (
-                 <AdIframe html={placementAds['bottomBanner'].adsterra.rawScript} placementId="bottomBanner" width={320} height={100} />
-               ) : placementAds['bottomBanner']?.adsterra?.zoneId ? (
-                 <AsterraAdFrame 
-                   zoneId={placementAds['bottomBanner'].adsterra.zoneId} 
-                   size={placementAds['bottomBanner'].adsterra.size} 
-                   width={320} 
-                   height={100}
-                 />
-               ) : null}
+               <HardcoreAd adType="BOTTOM_ADS" />
              </div>
            )}
         </div>
